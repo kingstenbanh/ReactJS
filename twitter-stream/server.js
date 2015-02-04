@@ -1,0 +1,46 @@
+var express = require('express');
+var exphbs = require('express-handlebars');
+var http = require('http');
+var mongoose = require('mongoose');
+var twitter = require('ntwitter');
+var routes = require('./routes');
+var config = require('./config');
+var streamHandler = require('./utils/streamHandler');
+
+var app = express();
+var port = process.env.PORT || 8080;
+
+// Set handlebars as the templating engine
+app.engine('handlebars', exphbs({defaultLayout: 'main'}));
+app.set('view engine', 'handlebars');
+
+// Disable etag headers on responses
+app.disable('etag');
+
+// Connect to our mongo database
+mongoose.connect('mongodb://localhost/react-tweets');
+
+// Create a new ntwitter instance
+var twit = new twitter(config.twitter);
+
+// Index route
+app.get('/', routes.index);
+
+// Page route
+app.get('/page/:page/:skip', routes.page);
+
+// Set /public as our static content dir
+app.use('/', express.static(__dirname + "/public/"));
+
+// Start our server
+var server = http.createServer(app).listen(port, function() {
+  console.log('Express server listening on port ' + port);
+});
+
+// Initialize socket.io
+var io = require('socket.io').listen(server);
+
+// Set a stream listener for tweets matching tracking keywords
+twit.stream('statuses/filter', {track: 'scotch_io, #scotchio'}, function(stream) {
+  streamHandler(stream, io);
+});
